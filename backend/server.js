@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const gymRoutes = require('./routes/gymRoutes');
 const trainerRoutes = require('./routes/trainerRoutes');
+const memberRoutes = require('./routes/memberRoutes');
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', authRoutes);
 app.use('/api/gyms', gymRoutes);
 app.use('/api/trainers', trainerRoutes);
+app.use('/api/members', memberRoutes);
 
 app.get('/', (req, res) => {
   res.send('FitClub Backend is running!');
