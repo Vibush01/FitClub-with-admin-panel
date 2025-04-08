@@ -8,6 +8,7 @@ const memberRoutes = require('./routes/memberRoutes');
 const membershipRoutes = require('./routes/membershipRoutes');
 const planRoutes = require('./routes/planRoutes');
 const gymMemberRoutes = require('./routes/gymMemberRoutes');
+const memberActionRoutes = require('./routes/memberActionRoutes');
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ app.use('/api/members', memberRoutes);
 app.use('/api/memberships', membershipRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/gym-members', gymMemberRoutes);
+app.use('/api/member', memberActionRoutes);
 
 app.get('/', (req, res) => {
   res.send('FitClub Backend is running!');
