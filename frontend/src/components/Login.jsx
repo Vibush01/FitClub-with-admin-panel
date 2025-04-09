@@ -18,8 +18,10 @@ import { useState } from 'react';
             navigate('/owner-dashboard');
           } else if (res.data.user.role === 'Gym') {
             navigate('/gym-owner-dashboard');
+          } else if (res.data.user.role === 'Member') {
+            navigate('/my-gym');
           } else {
-            setError('Access denied: Owner or Gym role required');
+            setError('Access denied: Owner, Gym, or Member role required');
           }
         } catch (err) {
           setError(err.response?.data?.message || 'Login failed');

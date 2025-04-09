@@ -9,7 +9,6 @@ const createGym = async (req, res) => {
   }
 
   try {
-    // Owner assigns a Gym user as the owner (must exist and be role: "Gym")
     const gymOwner = await User.findOne({ email: req.body.ownerEmail, role: 'Gym' });
     if (!gymOwner) {
       return res.status(400).json({ message: 'Gym owner email must correspond to an existing Gym user' });
@@ -52,6 +51,19 @@ const getGymById = async (req, res) => {
   }
 };
 
+const getMyGym = async (req, res) => {
+  try {
+    const gym = await Gym.findOne({ owner: req.user.id })
+      .populate('owner', 'email name')
+      .populate('trainers', 'email name')
+      .populate('members', 'email name');
+    if (!gym) return res.status(404).json({ message: 'Gym not found for this owner' });
+    res.json(gym);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch your gym', error: err.message });
+  }
+};
+
 const updateGym = async (req, res) => {
   const { name, address, photos, membershipDetails, ownerDetails } = req.body;
 
@@ -82,4 +94,4 @@ const deleteGym = async (req, res) => {
   }
 };
 
-module.exports = { createGym, getAllGyms, getGymById, updateGym, deleteGym };
+module.exports = { createGym, getAllGyms, getGymById, getMyGym, updateGym, deleteGym };

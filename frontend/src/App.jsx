@@ -2,13 +2,16 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
     import Home from './pages/Home';
     import OwnerDashboard from './pages/OwnerDashboard';
     import GymOwnerDashboard from './pages/GymOwnerDashboard';
+    import GymProfile from './pages/GymProfile';
     import Login from './components/Login';
     import './index.css';
 
     function ProtectedRoute({ children, allowedRole }) {
       const token = localStorage.getItem('token');
       const role = localStorage.getItem('role');
-      return token && role === allowedRole ? children : <Navigate to="/login" />;
+      if (!token) return <Navigate to="/login" />;
+      if (allowedRole && role !== allowedRole) return <Navigate to="/" />;
+      return children;
     }
 
     function App() {
@@ -25,6 +28,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
               <Route
                 path="/gym-owner-dashboard"
                 element={<ProtectedRoute allowedRole="Gym"><GymOwnerDashboard /></ProtectedRoute>}
+              />
+              <Route path="/gym/:gymId" element={<GymProfile />} />
+              <Route
+                path="/my-gym"
+                element={<ProtectedRoute><GymProfile /></ProtectedRoute>}
               />
             </Routes>
           </div>

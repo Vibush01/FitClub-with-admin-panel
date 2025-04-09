@@ -1,17 +1,23 @@
 const express = require('express');
 const { authMiddleware, restrictTo } = require('../middleware/authMiddleware');
-const { createGym, getAllGyms, getGymById, updateGym, deleteGym } = require('../controllers/gymController');
+const { createGym, getAllGyms, getGymById, getMyGym, updateGym, deleteGym } = require('../controllers/gymController');
 
 const router = express.Router();
 
-// All routes protected and restricted to Owner
-router.use(authMiddleware);
-router.use(restrictTo('Owner'));
+// Gym Owner route (fetch their own gym)
+router.get('/my-gym', authMiddleware, restrictTo('Gym'), getMyGym);
 
-router.post('/', createGym);
-router.get('/', getAllGyms);
-router.get('/:id', getGymById);
-router.put('/:id', updateGym);
-router.delete('/:id', deleteGym);
+// Owner-only routes (CRUD for all gyms)
+const ownerRouter = express.Router();
+ownerRouter.use(authMiddleware);
+ownerRouter.use(restrictTo('Owner'));
+
+ownerRouter.post('/', createGym);
+ownerRouter.get('/', getAllGyms);
+ownerRouter.get('/:id', getGymById);
+ownerRouter.put('/:id', updateGym);
+ownerRouter.delete('/:id', deleteGym);
+
+router.use(ownerRouter);
 
 module.exports = router;
