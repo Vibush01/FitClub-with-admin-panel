@@ -16,8 +16,10 @@ import { useState } from 'react';
           localStorage.setItem('role', res.data.user.role);
           if (res.data.user.role === 'Owner') {
             navigate('/owner-dashboard');
+          } else if (res.data.user.role === 'Gym') {
+            navigate('/gym-owner-dashboard');
           } else {
-            setError('Access denied: Owner role required');
+            setError('Access denied: Owner or Gym role required');
           }
         } catch (err) {
           setError(err.response?.data?.message || 'Login failed');
