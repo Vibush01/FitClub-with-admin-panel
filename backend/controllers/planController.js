@@ -14,7 +14,6 @@ const createPlan = async (req, res) => {
   }
 
   try {
-    // Verify trainer and their gym
     const trainer = await Trainer.findOne({ user: req.user.id });
     if (!trainer) {
       return res.status(403).json({ message: 'Trainer not assigned to any gym' });
@@ -24,13 +23,11 @@ const createPlan = async (req, res) => {
       return res.status(403).json({ message: 'Gym not found' });
     }
 
-    // Verify member is in the same gym
     const member = await Member.findById(memberId);
     if (!member || member.gym.toString() !== gym._id.toString()) {
       return res.status(400).json({ message: 'Member not found in your gym' });
     }
 
-    // Check for existing plan for this member and week
     const existingPlan = await Plan.findOne({ trainer: trainer._id, member: memberId, week, type });
     if (existingPlan) {
       return res.status(400).json({ message: `A ${type} plan already exists for this member for week ${week}` });
@@ -59,8 +56,11 @@ const getPlans = async (req, res) => {
     }
 
     const plans = await Plan.find({ trainer: trainer._id })
-      .populate('member', 'contactNumber user')
-      .populate('user', 'email name');
+      .populate({
+        path: 'member',
+        select: 'contactNumber',
+        populate: { path: 'user', select: 'email name' }
+      });
     res.json(plans);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch plans', error: err.message });
