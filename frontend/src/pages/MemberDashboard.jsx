@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router-dom';
 function MemberDashboard() {
   const [gyms, setGyms] = useState([]);
   const [memberGym, setMemberGym] = useState(null);
+  const [membership, setMembership] = useState(null);
   const [plans, setPlans] = useState([]);
   const [planRequest, setPlanRequest] = useState({ type: 'Workout', week: '' });
+  const [hasPendingRenewalRequest, setHasPendingRenewalRequest] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,9 @@ function MemberDashboard() {
     }
     fetchGyms();
     fetchMemberGym();
+    fetchMembership();
     fetchPlans();
+    fetchPendingRenewalRequest();
   }, [token]);
 
   const fetchGyms = async () => {
@@ -51,10 +55,20 @@ function MemberDashboard() {
       });
       setMemberGym(res.data);
     } catch (err) {
-      // Ignore "You are not a member of any gym" error to avoid clutter
       if (err.response?.data?.message !== 'You are not a member of any gym') {
         setError(err.response?.data?.message || 'Failed to fetch gym profile');
       }
+    }
+  };
+
+  const fetchMembership = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/memberships', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMembership(res.data[0] || null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch membership details');
     }
   };
 
@@ -66,6 +80,17 @@ function MemberDashboard() {
       setPlans(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch plans');
+    }
+  };
+
+  const fetchPendingRenewalRequest = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/memberships/pending-renewal', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHasPendingRenewalRequest(res.data.hasPendingRequest);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to check pending renewal request');
     }
   };
 
@@ -96,6 +121,19 @@ function MemberDashboard() {
       setPlanRequest({ type: 'Workout', week: '' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send plan request');
+    }
+  };
+
+  const handleRequestMembershipRenewal = async () => {
+    try {
+      await axios.post('http://localhost:5000/api/memberships/renew', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Membership renewal request sent successfully');
+      setHasPendingRenewalRequest(true); // Update state immediately
+      await fetchPendingRenewalRequest(); // Refresh status
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send renewal request');
     }
   };
 
@@ -155,6 +193,44 @@ function MemberDashboard() {
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        )}
+
+        {/* Membership Details */}
+        {memberGym && (
+          <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Membership Details</h2>
+            {membership ? (
+              <>
+                <p className="text-gray-600"><strong>Join Date:</strong> {new Date(membership.joinDate).toLocaleDateString()}</p>
+                <p className="text-gray-600"><strong>Expiry Date:</strong> {new Date(membership.expiryDate).toLocaleDateString()}</p>
+                {(() => {
+                  const expiryDate = new Date(membership.expiryDate);
+                  const currentDate = new Date();
+                  const daysUntilExpiry = Math.ceil((expiryDate - currentDate) / (1000 * 60 * 60 * 24));
+                  if (daysUntilExpiry <= 7) {
+                    return (
+                      <div className="mt-4">
+                        <p className="text-yellow-600">Your membership is expiring soon ({daysUntilExpiry} days left)!</p>
+                        {hasPendingRenewalRequest ? (
+                          <p className="text-gray-600 mt-2">Your renewal request is in progress</p>
+                        ) : (
+                          <button
+                            onClick={handleRequestMembershipRenewal}
+                            className="mt-2 bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition duration-300"
+                          >
+                            Request Membership Renewal
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
+            ) : (
+              <p className="text-gray-500">No active membership found</p>
             )}
           </div>
         )}

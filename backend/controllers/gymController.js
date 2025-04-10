@@ -1,66 +1,55 @@
+const mongoose = require('mongoose');
 const Gym = require('../models/Gym');
-const User = require('../models/User');
 
-const createGym = async (req, res) => {
-  const { name, address, photos, membershipDetails, ownerDetails } = req.body;
-
-  if (!name || !address || !ownerDetails || !ownerDetails.fullName || !ownerDetails.phone) {
-    return res.status(400).json({ message: 'Name, address, and owner details (fullName, phone) are required' });
-  }
-
+const getGyms = async (req, res) => {
   try {
-    const gymOwner = await User.findOne({ email: req.body.ownerEmail, role: 'Gym' });
-    if (!gymOwner) {
-      return res.status(400).json({ message: 'Gym owner email must correspond to an existing Gym user' });
+    const gyms = await Gym.find()
+      .populate('owner', 'name email')
+      .populate('trainers', 'name email')
+      .populate('members', 'name email');
+
+    if (!req.user) {
+      return res.status(401).json({ message: 'No user, authorization denied' });
     }
 
-    const gym = new Gym({
-      name,
-      address,
-      photos: photos || [],
-      owner: gymOwner._id,
-      trainers: [],
-      members: [],
-      membershipDetails: membershipDetails || [],
-      ownerDetails
-    });
-
-    await gym.save();
-    res.status(201).json({ message: 'Gym created successfully', gym });
+    if (req.user.role === 'Gym') {
+      const userGyms = gyms.filter(gym => gym.owner._id.toString() === req.user.id);
+      if (userGyms.length === 0) {
+        return res.status(404).json({ message: 'No gyms found for this owner' });
+      }
+      res.json(userGyms);
+    } else if (req.user.role === 'Member' || req.user.role === 'Trainer') {
+      res.json(gyms);
+    } else {
+      return res.status(403).json({ message: 'Access denied: insufficient permissions' });
+    }
   } catch (err) {
-    res.status(500).json({ message: 'Failed to create gym', error: err.message });
-  }
-};
-
-const getAllGyms = async (req, res) => {
-  try {
-    const gyms = await Gym.find().populate('owner', 'email name');
-    res.json(gyms);
-  } catch (err) {
+    console.error('Error in getGyms:', err);
     res.status(500).json({ message: 'Failed to fetch gyms', error: err.message });
   }
 };
 
-const getGymById = async (req, res) => {
-  try {
-    const gym = await Gym.findById(req.params.id).populate('owner', 'email name');
-    if (!gym) return res.status(404).json({ message: 'Gym not found' });
-    res.json(gym);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch gym', error: err.message });
-  }
-};
+const createGym = async (req, res) => {
+  const { name, address, photos, membershipDetails, ownerDetails } = req.body;
 
-const getMyGym = async (req, res) => {
+  if (!name || !address || !membershipDetails || !ownerDetails) {
+    return res.status(400).json({ message: 'Name, address, membership details, and owner details are required' });
+  }
+
   try {
-    const gym = await Gym.findOne({ owner: req.user.id })
-      .populate('owner', 'email name')
-      .populate('trainers', 'email name')
-      .populate('members', 'email name');
-    if (!gym) return res.status(404).json({ message: 'Gym not found for this owner' });
-    res.json(gym);
+    const gym = new Gym({
+      name,
+      address,
+      photos: photos || [],
+      owner: req.user.id,
+      membershipDetails,
+      ownerDetails
+    });
+    await gym.save();
+
+    res.status(201).json({ message: 'Gym created successfully', gym });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch your gym', error: err.message });
+    res.status(500).json({ message: 'Failed to create gym', error: err.message });
   }
 };
 
@@ -69,15 +58,21 @@ const updateGym = async (req, res) => {
 
   try {
     const gym = await Gym.findById(req.params.id);
-    if (!gym) return res.status(404).json({ message: 'Gym not found' });
+    if (!gym) {
+      return res.status(404).json({ message: 'Gym not found' });
+    }
+
+    if (gym.owner.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied: not the owner of this gym' });
+    }
 
     gym.name = name || gym.name;
     gym.address = address || gym.address;
     gym.photos = photos || gym.photos;
     gym.membershipDetails = membershipDetails || gym.membershipDetails;
     gym.ownerDetails = ownerDetails || gym.ownerDetails;
-
     await gym.save();
+
     res.json({ message: 'Gym updated successfully', gym });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update gym', error: err.message });
@@ -86,12 +81,21 @@ const updateGym = async (req, res) => {
 
 const deleteGym = async (req, res) => {
   try {
-    const gym = await Gym.findByIdAndDelete(req.params.id);
-    if (!gym) return res.status(404).json({ message: 'Gym not found' });
+    const gym = await Gym.findById(req.params.id);
+    if (!gym) {
+      return res.status(404).json({ message: 'Gym not found' });
+    }
+
+    if (gym.owner.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied: not the owner of this gym' });
+    }
+
+    await Gym.deleteOne({ _id: req.params.id });
+
     res.json({ message: 'Gym deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete gym', error: err.message });
   }
 };
 
-module.exports = { createGym, getAllGyms, getGymById, getMyGym, updateGym, deleteGym };
+module.exports = { getGyms, createGym, updateGym, deleteGym };
