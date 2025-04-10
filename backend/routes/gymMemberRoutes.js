@@ -1,10 +1,12 @@
 const express = require('express');
 const { authMiddleware, restrictTo } = require('../middleware/authMiddleware');
-const { listGyms, joinGym } = require('../controllers/gymMemberController');
+const { getAllGyms, joinGym, getJoinRequests, respondToJoinRequest } = require('../controllers/gymMemberController');
 
 const router = express.Router();
 
-router.get('/', listGyms); // Public route
+router.get('/', authMiddleware, getAllGyms);
 router.post('/join', authMiddleware, restrictTo('Member'), joinGym);
+router.get('/requests', authMiddleware, restrictTo('Gym', 'Trainer'), getJoinRequests);
+router.post('/respond', authMiddleware, restrictTo('Gym', 'Trainer'), respondToJoinRequest);
 
 module.exports = router;

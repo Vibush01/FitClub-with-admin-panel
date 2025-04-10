@@ -6,6 +6,7 @@ function TrainerDashboard() {
   const [members, setMembers] = useState([]);
   const [memberships, setMemberships] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [joinRequests, setJoinRequests] = useState([]);
   const [planData, setPlanData] = useState({ type: 'Workout', content: '', memberId: '', week: '' });
   const [newMember, setNewMember] = useState({ memberEmail: '', contactNumber: '' });
   const [error, setError] = useState('');
@@ -19,6 +20,7 @@ function TrainerDashboard() {
     fetchMembers();
     fetchMemberships();
     fetchPlans();
+    fetchJoinRequests();
   }, []);
 
   const fetchGym = async () => {
@@ -62,6 +64,17 @@ function TrainerDashboard() {
       setPlans(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch plans');
+    }
+  };
+
+  const fetchJoinRequests = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/gym-members/requests', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setJoinRequests(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch join requests');
     }
   };
 
@@ -149,6 +162,21 @@ function TrainerDashboard() {
     }
   };
 
+  const handleRespondToJoinRequest = async (requestId, action) => {
+    setError('');
+    setSuccess('');
+    try {
+      await axios.post('http://localhost:5000/api/gym-members/respond', { requestId, action }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess(`Join request ${action}ed successfully`);
+      fetchJoinRequests();
+      fetchMembers();
+    } catch (err) {
+      setError(err.response?.data?.message || `Failed to ${action} join request`);
+    }
+  };
+
   if (error) {
     return (
       <div className="p-6">
@@ -172,6 +200,38 @@ function TrainerDashboard() {
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Your Gym: {gym.name}</h2>
           <p className="text-gray-600"><strong>Address:</strong> {gym.address}</p>
           <p className="text-gray-600"><strong>Owner:</strong> {gym.owner?.name} ({gym.owner?.email})</p>
+        </div>
+
+        {/* Join Requests */}
+        <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Join Requests</h2>
+          {joinRequests.length === 0 ? (
+            <p className="text-gray-500">No pending join requests</p>
+          ) : (
+            <ul className="space-y-4">
+              {joinRequests.map((request) => (
+                <li key={request._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition duration-200">
+                  <span className="text-gray-700">
+                    {request.member.user.name} ({request.member.user.email}) - {request.member.contactNumber}
+                  </span>
+                  <div>
+                    <button
+                      onClick={() => handleRespondToJoinRequest(request._id, 'accept')}
+                      className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition duration-300 mr-2"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleRespondToJoinRequest(request._id, 'reject')}
+                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition duration-300"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Add Member */}

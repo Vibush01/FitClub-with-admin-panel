@@ -15,19 +15,18 @@ function GymProfile() {
 
   const fetchGym = async () => {
     try {
-      let url = 'http://localhost:5000/api/gym-members';
+      let url;
       let headers = {};
 
-      if (token && (role === 'Gym' || role === 'Member')) {
-        if (role === 'Gym') {
-          url = 'http://localhost:5000/api/gyms/my-gym';
-        } else if (role === 'Member') {
-          url = 'http://localhost:5000/api/member/gym-profile';
-        }
+      if (token && role === 'Member' && !gymId) {
+        url = 'http://localhost:5000/api/member/gym-profile';
+        headers = { Authorization: `Bearer ${token}` };
+      } else if (token && role === 'Gym' && !gymId) {
+        url = 'http://localhost:5000/api/gyms/my-gym';
         headers = { Authorization: `Bearer ${token}` };
       } else if (gymId) {
-        url = `http://localhost:5000/api/gym-members`;
-        const res = await axios.get(url);
+        url = 'http://localhost:5000/api/gym-members';
+        const res = await axios.get(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const selectedGym = res.data.find(g => g._id === gymId);
         if (!selectedGym) throw new Error('Gym not found');
         setGym(selectedGym);
