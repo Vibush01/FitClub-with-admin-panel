@@ -1,15 +1,17 @@
 const express = require('express');
 const { authMiddleware, restrictTo } = require('../middleware/authMiddleware');
-const { createPlan, getPlans, updatePlan, deletePlan } = require('../controllers/planController');
+const { getPlans, assignPlan, updatePlan, deletePlan, getPlanRequests, fulfillPlanRequest } = require('../controllers/planController');
 
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(restrictTo('Trainer'));
+router.use(restrictTo('Trainer', 'Member'));
 
-router.post('/', createPlan);
 router.get('/', getPlans);
-router.put('/:id', updatePlan);
-router.delete('/:id', deletePlan);
+router.post('/', restrictTo('Trainer'), assignPlan);
+router.put('/:id', restrictTo('Trainer'), updatePlan);
+router.delete('/:id', restrictTo('Trainer'), deletePlan);
+router.get('/requests', restrictTo('Trainer'), getPlanRequests);
+router.post('/fulfill', restrictTo('Trainer'), fulfillPlanRequest);
 
 module.exports = router;

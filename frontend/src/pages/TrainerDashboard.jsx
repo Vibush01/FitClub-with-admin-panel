@@ -7,30 +7,42 @@ function TrainerDashboard() {
   const [memberships, setMemberships] = useState([]);
   const [plans, setPlans] = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
+  const [planRequests, setPlanRequests] = useState([]);
   const [planData, setPlanData] = useState({ type: 'Workout', content: '', memberId: '', week: '' });
   const [newMember, setNewMember] = useState({ memberEmail: '', contactNumber: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
   const [updateContact, setUpdateContact] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [plansLoading, setPlansLoading] = useState(false);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
+    if (!token) {
+      setError('Please log in to view the dashboard');
+      setLoading(false);
+      return;
+    }
     fetchGym();
     fetchMembers();
     fetchMemberships();
     fetchPlans();
     fetchJoinRequests();
-  }, []);
+    fetchPlanRequests();
+  }, [token]);
 
   const fetchGym = async () => {
     try {
+      setLoading(true);
       const res = await axios.get('http://localhost:5000/api/member/trainer-gym', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setGym(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch gym');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,12 +70,17 @@ function TrainerDashboard() {
 
   const fetchPlans = async () => {
     try {
+      setPlansLoading(true);
       const res = await axios.get('http://localhost:5000/api/plans', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Fetched plans for trainer:', res.data);
       setPlans(res.data);
     } catch (err) {
+      console.error('Error fetching plans:', err);
       setError(err.response?.data?.message || 'Failed to fetch plans');
+    } finally {
+      setPlansLoading(false);
     }
   };
 
@@ -75,6 +92,17 @@ function TrainerDashboard() {
       setJoinRequests(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch join requests');
+    }
+  };
+
+  const fetchPlanRequests = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/plans/requests', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPlanRequests(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch plan requests');
     }
   };
 
@@ -103,7 +131,7 @@ function TrainerDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('Plan assigned successfully');
-      fetchPlans();
+      await fetchPlans(); // Ensure fetchPlans is awaited
       setPlanData({ type: 'Workout', content: '', memberId: '', week: '' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to assign plan');
@@ -118,7 +146,7 @@ function TrainerDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('Plan deleted successfully');
-      fetchPlans();
+      await fetchPlans();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete plan');
     }
@@ -177,6 +205,25 @@ function TrainerDashboard() {
     }
   };
 
+  const handleFulfillPlanRequest = async (requestId, memberId, type, week) => {
+    setError('');
+    setSuccess('');
+    try {
+      setPlanData({ type, memberId, week, content: '' });
+      await axios.post('http://localhost:5000/api/plans/fulfill', { requestId }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Plan request marked as fulfilled');
+      fetchPlanRequests();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fulfill plan request');
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6">Loading...</div>;
+  }
+
   if (error) {
     return (
       <div className="p-6">
@@ -228,6 +275,30 @@ function TrainerDashboard() {
                       Reject
                     </button>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Plan Requests */}
+        <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Plan Requests</h2>
+          {planRequests.length === 0 ? (
+            <p className="text-gray-500">No pending plan requests</p>
+          ) : (
+            <ul className="space-y-4">
+              {planRequests.map((request) => (
+                <li key={request._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition duration-200">
+                  <span className="text-gray-700">
+                    {request.member.user.name} ({request.member.user.email}) - {request.type} Plan (Week {request.week})
+                  </span>
+                  <button
+                    onClick={() => handleFulfillPlanRequest(request._id, request.member._id, request.type, request.week)}
+                    className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition duration-300"
+                  >
+                    Fulfill Request
+                  </button>
                 </li>
               ))}
             </ul>
@@ -406,7 +477,9 @@ function TrainerDashboard() {
         {/* Existing Plans */}
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Assigned Plans</h2>
-          {plans.length === 0 ? (
+          {plansLoading ? (
+            <p className="text-gray-500">Loading plans...</p>
+          ) : plans.length === 0 ? (
             <p className="text-gray-500">No plans assigned yet</p>
           ) : (
             <ul className="space-y-4">

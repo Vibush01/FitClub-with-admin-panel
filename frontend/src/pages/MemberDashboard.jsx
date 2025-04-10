@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 
 function MemberDashboard() {
   const [gyms, setGyms] = useState([]);
+  const [memberGym, setMemberGym] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [planRequest, setPlanRequest] = useState({ type: 'Workout', week: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
@@ -17,6 +20,8 @@ function MemberDashboard() {
       return;
     }
     fetchGyms();
+    fetchMemberGym();
+    fetchPlans();
   }, [token]);
 
   const fetchGyms = async () => {
@@ -39,6 +44,31 @@ function MemberDashboard() {
     }
   };
 
+  const fetchMemberGym = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/member/gym-profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMemberGym(res.data);
+    } catch (err) {
+      // Ignore "You are not a member of any gym" error to avoid clutter
+      if (err.response?.data?.message !== 'You are not a member of any gym') {
+        setError(err.response?.data?.message || 'Failed to fetch gym profile');
+      }
+    }
+  };
+
+  const fetchPlans = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/plans', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPlans(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch plans');
+    }
+  };
+
   const handleJoinRequest = async (gymId) => {
     try {
       await axios.post('http://localhost:5000/api/gym-members/join', { gymId }, {
@@ -56,6 +86,19 @@ function MemberDashboard() {
     navigate(`/gym/${gymId}`);
   };
 
+  const handleRequestPlan = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('http://localhost:5000/api/member/request-plan', planRequest, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Plan request sent successfully');
+      setPlanRequest({ type: 'Workout', week: '' });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send plan request');
+    }
+  };
+
   if (loading) {
     return <div className="p-6">Loading...</div>;
   }
@@ -67,39 +110,113 @@ function MemberDashboard() {
         {error && <p className="text-red-500 mb-4 text-center">{error}</p>}
         {success && <p className="text-green-500 mb-4 text-center">{success}</p>}
 
-        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Available Gyms</h2>
-          {gyms.length === 0 ? (
-            <p className="text-gray-500">No gyms available</p>
-          ) : (
-            <ul className="space-y-4">
-              {gyms.map((gym) => (
-                <li key={gym._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition duration-200">
-                  <span className="text-gray-700">{gym.name} - {gym.address}</span>
+        {/* Member's Gym Details */}
+        {memberGym ? (
+          <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Your Gym: {memberGym.name}</h2>
+            <p className="text-gray-600"><strong>Address:</strong> {memberGym.address}</p>
+            <p className="text-gray-600"><strong>Owner:</strong> {memberGym.owner?.name} ({memberGym.owner?.email})</p>
+            <button
+              onClick={() => navigate('/my-gym')}
+              className="mt-4 bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition duration-300"
+            >
+              View Full Details
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Available Gyms</h2>
+            {gyms.length === 0 ? (
+              <p className="text-gray-500">No gyms available</p>
+            ) : (
+              <ul className="space-y-4">
+                {gyms.map((gym) => (
+                  <li key={gym._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition duration-200">
+                    <span className="text-gray-700">{gym.name} - {gym.address}</span>
+                    <div>
+                      <button
+                        onClick={() => handleViewDetails(gym._id)}
+                        className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition duration-300 mr-2"
+                      >
+                        Details
+                      </button>
+                      <button
+                        onClick={() => handleJoinRequest(gym._id)}
+                        disabled={gym.hasPendingRequest}
+                        className={`p-2 rounded-lg transition duration-300 ${
+                          gym.hasPendingRequest
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {gym.hasPendingRequest ? 'Request Pending' : 'Request to Join'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Plans Section */}
+        {memberGym && (
+          <>
+            <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-700 mb-4">Your Plans</h2>
+              {plans.length === 0 ? (
+                <p className="text-gray-500">No plans assigned yet</p>
+              ) : (
+                <ul className="space-y-4">
+                  {plans.map((plan) => (
+                    <li key={plan._id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="text-gray-700">
+                        <strong>{plan.type} Plan</strong> (Week {plan.week})
+                        <br />
+                        {plan.content}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Request Plan Section */}
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-700 mb-4">Request a New Plan</h2>
+              <form onSubmit={handleRequestPlan}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <button
-                      onClick={() => handleViewDetails(gym._id)}
-                      className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition duration-300 mr-2"
+                    <label className="block text-gray-600 font-medium mb-2">Plan Type</label>
+                    <select
+                      value={planRequest.type}
+                      onChange={(e) => setPlanRequest({ ...planRequest, type: e.target.value })}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      Details
-                    </button>
-                    <button
-                      onClick={() => handleJoinRequest(gym._id)}
-                      disabled={gym.hasPendingRequest}
-                      className={`p-2 rounded-lg transition duration-300 ${
-                        gym.hasPendingRequest
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-green-600 text-white hover:bg-green-700'
-                      }`}
-                    >
-                      {gym.hasPendingRequest ? 'Request Pending' : 'Request to Join'}
-                    </button>
+                      <option value="Workout">Workout</option>
+                      <option value="Diet">Diet</option>
+                    </select>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                  <div>
+                    <label className="block text-gray-600 font-medium mb-2">Week Number</label>
+                    <input
+                      type="number"
+                      value={planRequest.week}
+                      onChange={(e) => setPlanRequest({ ...planRequest, week: e.target.value })}
+                      placeholder="Week Number"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                      min="1"
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="mt-4 w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">
+                  Request Plan
+                </button>
+              </form>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
