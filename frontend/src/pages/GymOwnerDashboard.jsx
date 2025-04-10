@@ -4,15 +4,18 @@ import { useState, useEffect } from 'react';
     function GymOwnerDashboard() {
       const [trainers, setTrainers] = useState([]);
       const [members, setMembers] = useState([]);
+      const [memberships, setMemberships] = useState([]);
       const [trainerEmail, setTrainerEmail] = useState('');
       const [memberEmail, setMemberEmail] = useState('');
       const [contactNumber, setContactNumber] = useState('');
+      const [membershipData, setMembershipData] = useState({ memberId: '', joinDate: '', expiryDate: '' });
       const [error, setError] = useState('');
       const token = localStorage.getItem('token');
 
       useEffect(() => {
         fetchTrainers();
         fetchMembers();
+        fetchMemberships();
       }, []);
 
       const fetchTrainers = async () => {
@@ -34,6 +37,17 @@ import { useState, useEffect } from 'react';
           setMembers(res.data);
         } catch (err) {
           setError(err.response?.data?.message || 'Failed to fetch members');
+        }
+      };
+
+      const fetchMemberships = async () => {
+        try {
+          const res = await axios.get('http://localhost:5000/api/memberships', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setMemberships(res.data);
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to fetch memberships');
         }
       };
 
@@ -64,6 +78,19 @@ import { useState, useEffect } from 'react';
         }
       };
 
+      const handleAddMembership = async (e) => {
+        e.preventDefault();
+        try {
+          await axios.post('http://localhost:5000/api/memberships', membershipData, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchMemberships();
+          setMembershipData({ memberId: '', joinDate: '', expiryDate: '' });
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to add membership');
+        }
+      };
+
       const handleDeleteTrainer = async (id) => {
         try {
           await axios.delete(`http://localhost:5000/api/trainers/${id}`, {
@@ -81,8 +108,20 @@ import { useState, useEffect } from 'react';
             headers: { Authorization: `Bearer ${token}` }
           });
           fetchMembers();
+          fetchMemberships();
         } catch (err) {
           setError(err.response?.data?.message || 'Failed to delete member');
+        }
+      };
+
+      const handleDeleteMembership = async (id) => {
+        try {
+          await axios.delete(`http://localhost:5000/api/memberships/${id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchMemberships();
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to delete membership');
         }
       };
 
@@ -162,7 +201,7 @@ import { useState, useEffect } from 'react';
           </div>
 
           {/* Member List */}
-          <div className="bg-white p-4 rounded-lg shadow">
+          <div className="bg-white p-4 rounded-lg shadow mb-6">
             <h2 className="text-xl font-semibold mb-4">Members</h2>
             {members.length === 0 ? (
               <p>No members found</p>
@@ -173,6 +212,72 @@ import { useState, useEffect } from 'react';
                     <span>{member.user.name} ({member.user.email}) - {member.contactNumber}</span>
                     <button
                       onClick={() => handleDeleteMember(member._id)}
+                      className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Add Membership */}
+          <div className="bg-white p-4 rounded-lg shadow mb-6">
+            <h2 className="text-xl font-semibold mb-4">Add Membership</h2>
+            <form onSubmit={handleAddMembership}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select
+                  value={membershipData.memberId}
+                  onChange={(e) => setMembershipData({ ...membershipData, memberId: e.target.value })}
+                  className="p-2 border rounded"
+                  required
+                >
+                  <option value="">Select Member</option>
+                  {members.map((member) => (
+                    <option key={member._id} value={member._id}>
+                      {member.user.name} ({member.user.email})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={membershipData.joinDate}
+                  onChange={(e) => setMembershipData({ ...membershipData, joinDate: e.target.value })}
+                  placeholder="Join Date"
+                  className="p-2 border rounded"
+                  required
+                />
+                <input
+                  type="date"
+                  value={membershipData.expiryDate}
+                  onChange={(e) => setMembershipData({ ...membershipData, expiryDate: e.target.value })}
+                  placeholder="Expiry Date"
+                  className="p-2 border rounded"
+                  required
+                />
+              </div>
+              <button type="submit" className="mt-4 bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+                Add Membership
+              </button>
+            </form>
+          </div>
+
+          {/* Membership List */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h2 className="text-xl font-semibold mb-4">Memberships</h2>
+            {memberships.length === 0 ? (
+              <p>No memberships found</p>
+            ) : (
+              <ul>
+                {memberships.map((membership) => (
+                  <li key={membership._id} className="flex justify-between items-center p-2 border-b">
+                    <span>
+                      {membership.member.user.name} - Join: {new Date(membership.joinDate).toLocaleDateString()} - 
+                      Expiry: {new Date(membership.expiryDate).toLocaleDateString()}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteMembership(membership._id)}
                       className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
                     >
                       Delete

@@ -1,79 +1,83 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const Gym = require('../models/Gym');
+    const bcrypt = require('bcryptjs');
+    const jwt = require('jsonwebtoken');
 
-const signup = async (req, res) => {
-  const { email, password, role, name, gymDetails } = req.body;
+    const signup = async (req, res) => {
+      const { email, password, role, name } = req.body;
 
-  // Validation
-  if (!email || !password || !role || !name) {
-    return res.status(400).json({ message: 'All fields (email, password, role, name) are required' });
-  }
-  if (!['Owner', 'Gym', 'Trainer', 'Member'].includes(role)) {
-    return res.status(400).json({ message: 'Invalid role' });
-  }
-
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: 'Email already in use' });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = new User({
-      email,
-      password: hashedPassword,
-      role,
-      name
-    });
-    await user.save();
-
-    if (role === 'Gym') {
-      if (!gymDetails || !gymDetails.name || !gymDetails.address || !gymDetails.ownerDetails || !gymDetails.ownerDetails.fullName || !gymDetails.ownerDetails.phone) {
-        await User.deleteOne({ _id: user._id }); // Rollback if gym details invalid
-        return res.status(400).json({ message: 'Gym details (name, address, ownerDetails.fullName, ownerDetails.phone) required' });
+      if (!email || !password || !role || !name) {
+        return res.status(400).json({ message: 'Email, password, role, and name are required' });
       }
-      const gym = new Gym({
-        name: gymDetails.name,
-        address: gymDetails.address,
-        photos: gymDetails.photos || [],
-        owner: user._id,
-        trainers: [],
-        members: [],
-        membershipDetails: gymDetails.membershipDetails || [],
-        ownerDetails: gymDetails.ownerDetails
-      });
-      await gym.save();
-    }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      if (!['Owner', 'Gym', 'Trainer', 'Member'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role' });
+      }
 
-    res.status(201).json({ token, user: { id: user._id, email, role, name } });
-  } catch (err) {
-    res.status(500).json({ message: 'Signup failed', error: err.message });
-  }
-};
+      try {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          return res.status(400).json({ message: 'User already exists' });
+        }
 
-const login = async (req, res) => {
-  const { email, password } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = new User({ email, password: hashedPassword, role, name });
+        await user.save();
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
-  }
+        const token = jwt.sign(
+          { id: user._id, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: '1h' }
+        );
 
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+        res.status(201).json({ token, user: { id: user._id, email: user.email, role: user.role } });
+      } catch (err) {
+        res.status(500).json({ message: 'Failed to signup', error: err.message });
+      }
+    };
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+    const login = async (req, res) => {
+      const { email, password } = req.body;
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+      }
 
-    res.json({ token, user: { id: user._id, email, role: user.role, name: user.name } });
-  } catch (err) {
-    res.status(500).json({ message: 'Login failed', error: err.message });
-  }
-};
+      try {
+        const user = await User.findOne({ email });
+        if (!user) {
+          return res.status(400).json({ message: 'Invalid credentials' });
+        }
 
-module.exports = { signup, login };
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+          return res.status(400).json({ message: 'Invalid credentials' });
+        }
+
+        const rawDateNow = Date.now();
+        const currentTime = Math.floor(rawDateNow / 1000);
+        const currentDate = new Date(rawDateNow);
+        console.log('Raw Date.now():', rawDateNow);
+        console.log('Current time (Unix timestamp):', currentTime);
+        console.log('Current date:', currentDate.toISOString());
+
+        // Fallback to a known good timestamp if the current time is incorrect
+        const expectedTimestamp = Math.floor(new Date('2024-10-27T00:00:00Z').getTime() / 1000); // Adjust to current date
+        const iat = currentTime > expectedTimestamp && currentTime < expectedTimestamp + 31536000 ? currentTime : expectedTimestamp;
+        const expiresInSeconds = 3600; // 1 hour
+        const exp = iat + expiresInSeconds;
+
+        const token = jwt.sign(
+          { id: user._id, role: user.role, iat: iat, exp: exp },
+          process.env.JWT_SECRET
+        );
+
+        console.log('Generated token:', token);
+
+        res.json({ token, user: { id: user._id, email: user.email, role: user.role } });
+      } catch (err) {
+        console.error('Error in login:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+      }
+    };
+
+    module.exports = { signup, login };

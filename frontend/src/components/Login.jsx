@@ -20,8 +20,10 @@ import { useState } from 'react';
             navigate('/gym-owner-dashboard');
           } else if (res.data.user.role === 'Member') {
             navigate('/my-gym');
+          } else if (res.data.user.role === 'Trainer') {
+            navigate('/trainer-dashboard');
           } else {
-            setError('Access denied: Owner, Gym, or Member role required');
+            setError('Access denied: Valid role required');
           }
         } catch (err) {
           setError(err.response?.data?.message || 'Login failed');

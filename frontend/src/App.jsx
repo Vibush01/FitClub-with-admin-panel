@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
     import OwnerDashboard from './pages/OwnerDashboard';
     import GymOwnerDashboard from './pages/GymOwnerDashboard';
     import GymProfile from './pages/GymProfile';
+    import TrainerDashboard from './pages/TrainerDashboard';
     import Login from './components/Login';
     import './index.css';
 
@@ -28,6 +29,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
               <Route
                 path="/gym-owner-dashboard"
                 element={<ProtectedRoute allowedRole="Gym"><GymOwnerDashboard /></ProtectedRoute>}
+              />
+              <Route
+                path="/trainer-dashboard"
+                element={<ProtectedRoute allowedRole="Trainer"><TrainerDashboard /></ProtectedRoute>}
               />
               <Route path="/gym/:gymId" element={<GymProfile />} />
               <Route
