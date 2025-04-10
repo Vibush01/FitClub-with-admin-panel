@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode'; // Correct: Use named export
 
 function MemberDashboard() {
   const [gyms, setGyms] = useState([]);
@@ -9,11 +10,19 @@ function MemberDashboard() {
   const [plans, setPlans] = useState([]);
   const [planRequest, setPlanRequest] = useState({ type: 'Workout', week: '' });
   const [hasPendingRenewalRequest, setHasPendingRenewalRequest] = useState(false);
+  const [trainers, setTrainers] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [selectedTrainer, setSelectedTrainer] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+
+  // Decode the token to get the user ID
+  const user = token ? jwtDecode(token) : null;
+  const userId = user ? user.id : null;
 
   useEffect(() => {
     if (!token) {
@@ -26,6 +35,7 @@ function MemberDashboard() {
     fetchMembership();
     fetchPlans();
     fetchPendingRenewalRequest();
+    fetchMessages();
   }, [token]);
 
   const fetchGyms = async () => {
@@ -94,6 +104,21 @@ function MemberDashboard() {
     }
   };
 
+  const fetchMessages = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/messages/member', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTrainers(res.data.trainers);
+      setMessages(res.data.messages);
+      if (res.data.trainers.length > 0 && !selectedTrainer) {
+        setSelectedTrainer(res.data.trainers[0].user._id.toString());
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch messages');
+    }
+  };
+
   const handleJoinRequest = async (gymId) => {
     try {
       await axios.post('http://localhost:5000/api/gym-members/join', { gymId }, {
@@ -130,10 +155,29 @@ function MemberDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('Membership renewal request sent successfully');
-      setHasPendingRenewalRequest(true); // Update state immediately
-      await fetchPendingRenewalRequest(); // Refresh status
+      setHasPendingRenewalRequest(true);
+      await fetchPendingRenewalRequest();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send renewal request');
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!selectedTrainer || !newMessage.trim()) return;
+
+    try {
+      await axios.post('http://localhost:5000/api/messages', {
+        recipientId: selectedTrainer,
+        content: newMessage
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Message sent successfully');
+      setNewMessage('');
+      await fetchMessages();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send message');
     }
   };
 
@@ -231,6 +275,73 @@ function MemberDashboard() {
               </>
             ) : (
               <p className="text-gray-500">No active membership found</p>
+            )}
+          </div>
+        )}
+
+        {/* Trainer Details and Messaging */}
+        {memberGym && (
+          <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Contact Your Trainer</h2>
+            {trainers.length === 0 ? (
+              <p className="text-gray-500">No trainers assigned to your gym</p>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <label className="block text-gray-600 font-medium mb-2">Select Trainer</label>
+                  <select
+                    value={selectedTrainer || ''}
+                    onChange={(e) => setSelectedTrainer(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {trainers.map((trainer) => (
+                      <option key={trainer.user._id} value={trainer.user._id}>
+                        {trainer.user.name} ({trainer.user.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4 max-h-64 overflow-y-auto p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  {messages
+                    .filter(msg =>
+                      (msg.sender._id.toString() === selectedTrainer && msg.recipient._id.toString() === userId) ||
+                      (msg.sender._id.toString() === userId && msg.recipient._id.toString() === selectedTrainer)
+                    )
+                    .map((msg) => (
+                      <div
+                        key={msg._id}
+                        className={`mb-2 p-2 rounded-lg ${
+                          msg.sender._id.toString() === userId ? 'bg-blue-100 ml-auto' : 'bg-gray-200 mr-auto'
+                        } max-w-xs`}
+                      >
+                        <p className="text-sm text-gray-600">
+                          {msg.sender.name} ({new Date(msg.timestamp).toLocaleString()}):
+                        </p>
+                        <p>{msg.content}</p>
+                      </div>
+                    ))}
+                </div>
+
+                <form onSubmit={handleSendMessage}>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Type your message..."
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
           </div>
         )}

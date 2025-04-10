@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode'; // Correct: Use named export
 
 function TrainerDashboard() {
   const [gym, setGym] = useState(null);
@@ -8,15 +9,21 @@ function TrainerDashboard() {
   const [plans, setPlans] = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
   const [planRequests, setPlanRequests] = useState([]);
-  const [planData, setPlanData] = useState({ type: 'Workout', content: '', memberId: '', week: '' });
+  const [messages, setMessages] = useState([]);
   const [newMember, setNewMember] = useState({ memberEmail: '', contactNumber: '' });
+  const [planData, setPlanData] = useState({ type: 'Workout', content: '', memberId: '', week: '' });
+  const [newMessage, setNewMessage] = useState('');
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [selectedMemberForMessaging, setSelectedMemberForMessaging] = useState(null);
+  const [updateContact, setUpdateContact] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [updateContact, setUpdateContact] = useState('');
   const [loading, setLoading] = useState(true);
-  const [plansLoading, setPlansLoading] = useState(false);
   const token = localStorage.getItem('token');
+
+  // Decode the token to get the user ID
+  const user = token ? jwtDecode(token) : null;
+  const userId = user ? user.id : null;
 
   useEffect(() => {
     if (!token) {
@@ -30,6 +37,7 @@ function TrainerDashboard() {
     fetchPlans();
     fetchJoinRequests();
     fetchPlanRequests();
+    fetchMessages();
   }, [token]);
 
   const fetchGym = async () => {
@@ -70,17 +78,12 @@ function TrainerDashboard() {
 
   const fetchPlans = async () => {
     try {
-      setPlansLoading(true);
       const res = await axios.get('http://localhost:5000/api/plans', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Fetched plans for trainer:', res.data);
       setPlans(res.data);
     } catch (err) {
-      console.error('Error fetching plans:', err);
       setError(err.response?.data?.message || 'Failed to fetch plans');
-    } finally {
-      setPlansLoading(false);
     }
   };
 
@@ -103,6 +106,21 @@ function TrainerDashboard() {
       setPlanRequests(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch plan requests');
+    }
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/messages/trainer', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMembers(res.data.members);
+      setMessages(res.data.messages);
+      if (res.data.members.length > 0 && !selectedMemberForMessaging) {
+        setSelectedMemberForMessaging(res.data.members[0].user._id.toString());
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch messages');
     }
   };
 
@@ -131,7 +149,7 @@ function TrainerDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('Plan assigned successfully');
-      await fetchPlans(); // Ensure fetchPlans is awaited
+      fetchPlans();
       setPlanData({ type: 'Workout', content: '', memberId: '', week: '' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to assign plan');
@@ -146,7 +164,7 @@ function TrainerDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('Plan deleted successfully');
-      await fetchPlans();
+      fetchPlans();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete plan');
     }
@@ -217,6 +235,25 @@ function TrainerDashboard() {
       fetchPlanRequests();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fulfill plan request');
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!selectedMemberForMessaging || !newMessage.trim()) return;
+
+    try {
+      await axios.post('http://localhost:5000/api/messages', {
+        recipientId: selectedMemberForMessaging,
+        content: newMessage
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Message sent successfully');
+      setNewMessage('');
+      await fetchMessages();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send message');
     }
   };
 
@@ -302,6 +339,71 @@ function TrainerDashboard() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* Messages from Members */}
+        <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Messages from Members</h2>
+          {members.length === 0 ? (
+            <p className="text-gray-500">No members to message</p>
+          ) : (
+            <>
+              <div className="mb-4">
+                <label className="block text-gray-600 font-medium mb-2">Select Member</label>
+                <select
+                  value={selectedMemberForMessaging || ''}
+                  onChange={(e) => setSelectedMemberForMessaging(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {members.map((member) => (
+                    <option key={member.user._id} value={member.user._id}>
+                      {member.user.name} ({member.user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-4 max-h-64 overflow-y-auto p-4 bg-gray-50 rounded-lg border border-gray-200">
+                {messages
+                  .filter(msg =>
+                    (msg.sender._id.toString() === selectedMemberForMessaging && msg.recipient._id.toString() === userId) ||
+                    (msg.sender._id.toString() === userId && msg.recipient._id.toString() === selectedMemberForMessaging)
+                  )
+                  .map((msg) => (
+                    <div
+                      key={msg._id}
+                      className={`mb-2 p-2 rounded-lg ${
+                        msg.sender._id.toString() === userId ? 'bg-blue-100 ml-auto' : 'bg-gray-200 mr-auto'
+                      } max-w-xs`}
+                    >
+                      <p className="text-sm text-gray-600">
+                        {msg.sender.name} ({new Date(msg.timestamp).toLocaleString()}):
+                      </p>
+                      <p>{msg.content}</p>
+                    </div>
+                  ))}
+              </div>
+
+              <form onSubmit={handleSendMessage}>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300"
+                  >
+                    Send
+                  </button>
+                </div>
+              </form>
+            </>
           )}
         </div>
 
@@ -477,9 +579,7 @@ function TrainerDashboard() {
         {/* Existing Plans */}
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Assigned Plans</h2>
-          {plansLoading ? (
-            <p className="text-gray-500">Loading plans...</p>
-          ) : plans.length === 0 ? (
+          {plans.length === 0 ? (
             <p className="text-gray-500">No plans assigned yet</p>
           ) : (
             <ul className="space-y-4">
