@@ -7,8 +7,11 @@ function TrainerDashboard() {
   const [memberships, setMemberships] = useState([]);
   const [plans, setPlans] = useState([]);
   const [planData, setPlanData] = useState({ type: 'Workout', content: '', memberId: '', week: '' });
+  const [newMember, setNewMember] = useState({ memberEmail: '', contactNumber: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [updateContact, setUpdateContact] = useState('');
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -62,6 +65,22 @@ function TrainerDashboard() {
     }
   };
 
+  const handleAddMember = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await axios.post('http://localhost:5000/api/members', newMember, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Member added successfully');
+      fetchMembers();
+      setNewMember({ memberEmail: '', contactNumber: '' });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to add member');
+    }
+  };
+
   const handleAssignPlan = async (e) => {
     e.preventDefault();
     setError('');
@@ -92,6 +111,44 @@ function TrainerDashboard() {
     }
   };
 
+  const handleViewMember = (member) => {
+    setSelectedMember(member);
+    setUpdateContact(member.contactNumber);
+  };
+
+  const handleUpdateMember = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await axios.put(`http://localhost:5000/api/members/${selectedMember._id}`, { contactNumber: updateContact }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Member updated successfully');
+      fetchMembers();
+      setSelectedMember(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update member');
+    }
+  };
+
+  const handleDeleteMember = async (id) => {
+    setError('');
+    setSuccess('');
+    try {
+      await axios.delete(`http://localhost:5000/api/members/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Member removed successfully');
+      fetchMembers();
+      fetchMemberships();
+      fetchPlans();
+      setSelectedMember(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete member');
+    }
+  };
+
   if (error) {
     return (
       <div className="p-6">
@@ -116,6 +173,40 @@ function TrainerDashboard() {
         <p><strong>Owner:</strong> {gym.owner?.name} ({gym.owner?.email})</p>
       </div>
 
+      {/* Add Member */}
+      <div className="bg-white p-4 rounded-lg shadow mb-6">
+        <h2 className="text-xl font-semibold mb-4">Add Member</h2>
+        <form onSubmit={handleAddMember}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700">Member Email</label>
+              <input
+                type="email"
+                value={newMember.memberEmail}
+                onChange={(e) => setNewMember({ ...newMember, memberEmail: e.target.value })}
+                placeholder="Member Email"
+                className="p-2 border rounded w-full"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700">Contact Number</label>
+              <input
+                type="text"
+                value={newMember.contactNumber}
+                onChange={(e) => setNewMember({ ...newMember, contactNumber: e.target.value })}
+                placeholder="Contact Number"
+                className="p-2 border rounded w-full"
+                required
+              />
+            </div>
+          </div>
+          <button type="submit" className="mt-4 bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+            Add Member
+          </button>
+        </form>
+      </div>
+
       {/* Members and Memberships */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <h2 className="text-xl font-semibold mb-4">Members</h2>
@@ -126,7 +217,7 @@ function TrainerDashboard() {
             {members.map((member) => {
               const membership = memberships.find(m => m.member._id === member._id);
               return (
-                <li key={member._id} className="p-2 border-b">
+                <li key={member._id} className="flex justify-between items-center p-2 border-b">
                   <span>
                     {member.user.name} ({member.user.email}) - {member.contactNumber}
                     <br />
@@ -134,12 +225,60 @@ function TrainerDashboard() {
                       ? `Join: ${new Date(membership.joinDate).toLocaleDateString()}, Expiry: ${new Date(membership.expiryDate).toLocaleDateString()}`
                       : 'No active membership'}
                   </span>
+                  <div>
+                    <button
+                      onClick={() => handleViewMember(member)}
+                      className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600 mr-2"
+                    >
+                      View/Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMember(member._id)}
+                      className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+
+      {/* Member Modal */}
+      {selectedMember && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h2 className="text-xl font-semibold mb-4">Member Details: {selectedMember.user.name}</h2>
+            <p><strong>Email:</strong> {selectedMember.user.email}</p>
+            <form onSubmit={handleUpdateMember}>
+              <div className="mb-4">
+                <label className="block text-gray-700">Contact Number</label>
+                <input
+                  type="text"
+                  value={updateContact}
+                  onChange={(e) => setUpdateContact(e.target.value)}
+                  className="p-2 border rounded w-full"
+                  required
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMember(null)}
+                  className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 mr-2"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+                  Update
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Assign Plan */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
@@ -213,7 +352,7 @@ function TrainerDashboard() {
             {plans.map((plan) => (
               <li key={plan._id} className="flex justify-between items-center p-2 border-b">
                 <span>
-                  <strong>{plan.type} Plan</strong> for {plan.member.user.name} (Week {plan.week})
+                  <strong>{plan.type} Plan</strong> for {plan.member ? `${plan.member.user.name}` : 'Deleted Member'} (Week {plan.week})
                   <br />
                   {plan.content}
                 </span>
